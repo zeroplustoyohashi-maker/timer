@@ -2,23 +2,27 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iPad用 PiPタイマー</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iPad PiP Timer (iOS Optimized)</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 50px; background: #f4f4f9; }
-        canvas { background: #000; display: none; }
-        button { padding: 20px 40px; font-size: 20px; border-radius: 12px; border: none; background: #007aff; color: white; cursor: pointer; margin: 10px; }
-        button:active { opacity: 0.7; }
+        body { font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+        canvas { background: #000; display: block; margin: 0 auto 20px; border-radius: 10px; }
+        /* iOSでは完全にdisplay:noneにするとPiPが失敗することがあるため、見えないサイズで配置 */
+        video { width: 1px; height: 1px; opacity: 0.01; }
+        button { padding: 20px; width: 80%; font-size: 18px; font-weight: bold; border-radius: 15px; border: none; background: #007aff; color: white; margin: 10px 0; }
+        #resetBtn { background: #8e8e93; }
     </style>
 </head>
 <body>
     <h1>PiP Timer</h1>
-    <canvas id="c" width="400" height="200"></canvas>
-    <video id="v" autoplay muted playsinline style="display:none;"></video>
+    
+    <canvas id="c" width="400" height="200" style="width: 200px; height: 100px;"></canvas>
+    
+    <video id="v" autoplay muted playsinline></video>
     
     <div>
         <button id="pipBtn">タイマーを浮かせる (PiP)</button>
-        <button id="resetBtn" style="background:#8e8e93;">リセット</button>
+        <button id="resetBtn">リセット</button>
     </div>
 
     <script>
@@ -32,8 +36,9 @@
                 const now = Date.now();
                 if (now - lastUpdate >= 1000) { seconds++; lastUpdate = now; }
             }
+            // 描画処理
             ctx.fillStyle = 'black'; ctx.fillRect(0, 0, 400, 200);
-            ctx.fillStyle = 'white'; ctx.font = 'bold 80px monospace';
+            ctx.fillStyle = 'white'; ctx.font = 'bold 100px monospace';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             const m = Math.floor(seconds / 60).toString().padStart(2, '0');
             const s = (seconds % 60).toString().padStart(2, '0');
@@ -41,13 +46,25 @@
             requestAnimationFrame(draw);
         }
 
+        // PiP起動処理（iOS Safariに最適化）
         pipBtn.onclick = async () => {
-            video.srcObject = canvas.captureStream(10);
-            await video.play();
-            await video.requestPictureInPicture();
+            if (!video.srcObject) {
+                video.srcObject = canvas.captureStream(30); // 30 FPSで滑らかに
+            }
+            try {
+                await video.play();
+                if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === "function") {
+                    // 古いiOS/iPadOS向けの処理
+                    video.webkitSetPresentationMode("picture-in-picture");
+                } else {
+                    // 標準的なAPI
+                    await video.requestPictureInPicture();
+                }
+            } catch (error) {
+                alert("Safariで開いていますか？または操作をやり直してください: " + error);
+            }
         };
 
-        // PiP窓の「再生・停止」ボタンと連ation
         video.onplay = () => { running = true; lastUpdate = Date.now(); };
         video.onpause = () => { running = false; };
         resetBtn.onclick = () => { seconds = 0; };
